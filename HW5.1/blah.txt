@@ -1,0 +1,16 @@
+blockIdx.x = 0 .. 1023
+blockIdx.y = 0
+blockIdx.z = 0
+
+threadIdx.x = 0 .. 1023
+threadIdx.y = 0
+threadIdx.z = 0
+
+blockDim.x = 1024
+blockDim.y = 1
+
+Col = threadIdx.x + blockIdx.x * blockDim.x;
+Row = threadIdx.y + blockIdx.y * blockDim.y;
+
+Col = 0 .. 1023 + 1023 * 1024 (GRAY_FILE_SIZE - 1)
+Row = 0
