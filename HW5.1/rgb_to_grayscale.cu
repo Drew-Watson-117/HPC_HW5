@@ -5,12 +5,13 @@
 __global__ void rgb_to_grayscale(unsigned char* grayImage, unsigned char* rgbImage, int width, int height){
     int Col = threadIdx.x + blockIdx.x * blockDim.x;
     int Row = threadIdx.y + blockIdx.y * blockDim.y;
+    // 1-D coordinate for grayscale image
+    int grayOffset = Row*width + Col;
 
-    if (Col < width && Row < height) {
-        // 1-D coordinate for grayscale image
-        int grayOffset = Row*width + Col;
+    // Make sure grayOffset is in image boundary
+    if (grayOffset < width*height) {
         // RGB image has 3 * columns of grayscale image
-        int rgbOffset = grayOffest * 3;
+        int rgbOffset = grayOffset * 3;
         unsigned char r = rgbImage[rgbOffset];
         unsigned char g = rgbImage[rgbOffset + 1];
         unsigned char b = rgbImage[rgbOffset + 2];
@@ -23,40 +24,39 @@ int main()
 {
     size_t FILE_SIZE = 1024 * 1024 * 3;
     size_t GRAY_FILE_SIZE = 1024 * 1024;
-    char buffer_h[FILE_SIZE]; // Host buffer
-    char buffer_d[FILE_SIZE]; // Device buffer
-    char gray_buffer_d[GRAY_FILE_SIZE]; // Buffer for grayscale image on device
-    char gray_buffer_h[GRAY_FILE_SIZE]; // Buffer for grayscale image on host
+    unsigned char buffer_h[FILE_SIZE]; // Host buffer for RGB image
+    unsigned char* buffer_d; // Device buffer for RGB image
+    unsigned char* gray_buffer_d; // Buffer for grayscale image on device
+    unsigned char gray_buffer_h[GRAY_FILE_SIZE]; // Buffer for grayscale image on host
     // Allocate space on the cuda device for the device buffer
     cudaMalloc((void **) &buffer_d, FILE_SIZE);
     cudaMalloc((void **) &gray_buffer_d, GRAY_FILE_SIZE);
-    cudaDeviceSynchronize();
 
     FILE *image_raw = fopen("gc_conv_1024x1024.raw","rb");
-    size_t r = read(image_raw, buffer_h, FILE_SIZE);
+    size_t r = fread(buffer_h, sizeof(unsigned char), FILE_SIZE, image_raw);
     fclose(image_raw);
 
     // Copy Host buffer to Device buffer
     cudaMemcpy(buffer_d, buffer_h, FILE_SIZE, cudaMemcpyHostToDevice);
 
     // Define dimensions of cuda grid
-    // TODO: MAKE SURE THIS DIMENSION ENSURES Row BECOMES 1024 AND Col BECOMES 1024
-    dim3 DimGrid(ceil(GRAY_FILE_SIZE/1024,1,1));
+    dim3 DimGrid(1024,1,1);
     dim3 DimBlock(1024,1,1);
+
+    // Run kernel on cuda grid
     rgb_to_grayscale<<<DimGrid,DimBlock>>>(gray_buffer_d,buffer_d,1024,1024);
 
     // Copy device buffer to host
     cudaMemcpy(gray_buffer_h, gray_buffer_d, GRAY_FILE_SIZE, cudaMemcpyDeviceToHost);
 
     // Write buffer to file
-    FILE *file = fopen("gc.raw", "w");
-    fprintf(file,gray_buffer_h);
+    FILE *file = fopen("gc.raw", "wb");
+    size_t w = fwrite(gray_buffer_h, sizeof(unsigned char), GRAY_FILE_SIZE, file);
     fclose(file);
 
+    // Free device memory
     cudaFree(buffer_d);
     cudaFree(gray_buffer_d);
-    free(buffer_h);
-    free(gray_buffer_h);
 
     return 0;
 }
